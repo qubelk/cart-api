@@ -19,37 +19,35 @@ func NewCartRef() *Cart {
 	}
 }
 
+func (c *Cart) RecalculateTotal() {
+	c.TotalPrice = 0.0
+	for _, i := range c.Items {
+		c.TotalPrice = i.GetTotalPrice()
+	}
+}
+
 func (c *Cart) AddItem(item Product) {
 	if i, exists := c.Items[item.UUID]; exists {
 		i.Quantity += item.Quantity
 		c.Items[item.UUID] = i
-		c.TotalPrice += i.GetTotalPrice()
-		return
+	} else {
+		c.Items[item.UUID] = item
 	}
-	c.Items[item.UUID] = item
+
+	c.RecalculateTotal()
 }
 
 func (c *Cart) RemoveItem(id string) error {
-	i, exists := c.Items[id]
-	if !exists {
+	if _, exists := c.Items[id]; !exists {
 		return ItemNotExists
 	}
 
-	if i.Quantity == 1 {
-		c.TotalPrice -= i.GetTotalPrice()
-		delete(c.Items, id)
-		return nil
-	}
-
-	i.Quantity--
-	c.Items[id] = i
-	c.TotalPrice -= i.Price
+	delete(c.Items, id)
+	c.RecalculateTotal()
 	return nil
 }
 
 func (c *Cart) CleanCart() {
-	for k := range c.Items {
-		delete(c.Items, k)
-	}
+	c.Items = make(map[string]Product)
 	c.TotalPrice = 0.0
 }

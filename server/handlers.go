@@ -30,15 +30,25 @@ func (h *HTTPHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 		cart = products.NewCartRef()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cart)
+	WriteJson(w, cart)
 }
 
 func (h *HTTPHandler) AddProductHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("user_id").(string)
 
-	var item products.Product
+	var item ProductDTO
 	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	product, err := products.NewProduct(
+		item.Title,
+		item.Price,
+		item.Quantity,
+	)
+
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -52,20 +62,9 @@ func (h *HTTPHandler) AddProductHandler(w http.ResponseWriter, r *http.Request) 
 		h.carts[userID] = cart
 	}
 
-	for k, v := range cart.Items {
-		if v.UUID == item.UUID {
-			tmp := cart.Items[k]
-			tmp.Quantity += item.Quantity
-			cart.Items[k] = tmp
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(cart)
-			return
-		}
-	}
+	cart.AddItem(product)
 
-	cart.Items[item.UUID] = item
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(cart)
+	WriteJson(w, cart)
 }
 
 func (h *HTTPHandler) DeleteProductHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,14 +80,27 @@ func (h *HTTPHandler) DeleteProductHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	for _, v := range cart.Items {
-		if v.UUID == itemID {
-			cart.RemoveItem(itemID)
-			w.WriteHeader(http.StatusNoContent)
-			json.NewEncoder(w).Encode(cart)
-			return
-		}
+	err := cart.RemoveItem(itemID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
 	}
 
-	http.Error(w, "Item not found", http.StatusNotFound)
+	WriteJson(w, cart)
+}
+
+func (h *HTTPHandler) CleanCartHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(string)
+
+	h.mtx.Lock()
+	defer h.mtx.Unlock()
+
+	cart, exists := h.carts[userID]
+	if !exists {
+		http.Error(w, "Cart not found", http.StatusBadRequest)
+	}
+
+	cart.CleanCart()
+
+	WriteJson(w, cart)
 }

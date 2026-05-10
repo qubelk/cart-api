@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -31,17 +32,20 @@ func (s *Server) StartServer() {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var userID string
 
-			if cookie, err := r.Cookie("user_id"); err == nil {
+			cookie, err := r.Cookie("user_id")
+			if err == nil {
 				userID = cookie.Value
+				log.Printf("Found user cookies: %s\n", userID)
 			}
 
 			if userID == "" {
 				userID = simpleUserIDGenerator()
 				http.SetCookie(w, &http.Cookie{
-					Name:   "user_id",
-					Value:  userID,
-					Path:   "/",
-					MaxAge: 3600,
+					Name:     "user_id",
+					Value:    userID,
+					Path:     "/",
+					MaxAge:   3600,
+					HttpOnly: true,
 				})
 			}
 
